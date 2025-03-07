@@ -68,13 +68,38 @@ async function main() {
     console.log('\nExample 1: Using the generalCLI prompt for a simple task');
     
     try {
-      // Use bash tool to list JavaScript files and count lines
-      const generalCliResult = await client.callTool({
-        name: 'bash',
+      // Use searchGlob and readFile tools instead of bash
+      console.log('Searching for JavaScript files...');
+      const searchResult = await client.callTool({
+        name: 'searchGlob',
         arguments: {
-          command: 'find . -name "*.js" -type f | xargs wc -l'
+          pattern: '*.js',
+          path: '.'
         }
       });
+      
+      const jsFiles = JSON.parse(searchResult.content[0].text);
+      console.log(`Found ${jsFiles.length} JavaScript files`);
+      
+      // Count lines in each file
+      let fileStats = [];
+      for (const file of jsFiles.slice(0, 5)) { // Limit to first 5 files for brevity
+        const fileContent = await client.callTool({
+          name: 'readFile',
+          arguments: {
+            file_path: file
+          }
+        });
+        
+        const lineCount = fileContent.content[0].text.split('\n').length;
+        fileStats.push({ file, lineCount });
+      }
+      
+      const generalCliResult = {
+        content: [{
+          text: JSON.stringify(fileStats, null, 2)
+        }]
+      };
       
       console.log('generalCLI prompt result:');
       console.log(generalCliResult.content[0].text);
@@ -260,13 +285,42 @@ describe('Product', () => {
     
     await fs.writeFile(path.join(projectDir, 'package.json'), packageJson);
     
-    // Use bash tool to create a sample CLAUDE.md file
+    // Use editFile tool to create a sample CLAUDE.md file
+    const claudeMdContent = `# Project Documentation
+
+## Build Commands
+- Build: npm run build
+- Test: npm run test
+- Lint: npm run lint
+
+## Code Style
+- Use TypeScript
+- Follow ESLint rules
+- Use async/await for async operations
+- Use descriptive variable names`;
+
     const initCodebaseResult = await client.callTool({
-      name: 'bash',
+      name: 'editFile',
       arguments: {
-        command: 'echo "# Project Documentation\n\n## Build Commands\n- Build: npm run build\n- Test: npm run test\n- Lint: npm run lint\n\n## Code Style\n- Use TypeScript\n- Follow ESLint rules\n- Use async/await for async operations\n- Use descriptive variable names" > CLAUDE.md && cat CLAUDE.md'
+        file_path: path.join(projectDir, 'CLAUDE.md'),
+        content: claudeMdContent
       }
     });
+    
+    // Read the file to verify it was created
+    const readResult = await client.callTool({
+      name: 'readFile',
+      arguments: {
+        file_path: path.join(projectDir, 'CLAUDE.md')
+      }
+    });
+    
+    // Format the result to match the expected format
+    const formattedResult = {
+      content: [{
+        text: readResult.content[0].text
+      }]
+    };
     
     console.log('initCodebase prompt result:');
     console.log(initCodebaseResult.content[0].text);
@@ -338,13 +392,42 @@ module.exports = {
     await fs.writeFile(originalFilePath, originalFile);
     await fs.writeFile(modifiedFilePath, modifiedFile);
     
-    // Use bash tool to simulate a PR review
-    const prReviewResult = await client.callTool({
-      name: 'bash',
+    // Use readFile tools to read both files and compare them manually
+    const originalContent = await client.callTool({
+      name: 'readFile',
       arguments: {
-        command: 'diff -u ' + originalFilePath + ' ' + modifiedFilePath
+        file_path: originalFilePath
       }
     });
+    
+    const modifiedContent = await client.callTool({
+      name: 'readFile',
+      arguments: {
+        file_path: modifiedFilePath
+      }
+    });
+    
+    // Create a simple diff output
+    const originalLines = originalContent.content[0].text.split('\n');
+    const modifiedLines = modifiedContent.content[0].text.split('\n');
+    
+    let diffOutput = `--- ${originalFilePath}\n+++ ${modifiedFilePath}\n`;
+    
+    // Find differences (very simple diff)
+    for (let i = 0; i < Math.max(originalLines.length, modifiedLines.length); i++) {
+      const originalLine = i < originalLines.length ? originalLines[i] : '';
+      const modifiedLine = i < modifiedLines.length ? modifiedLines[i] : '';
+      
+      if (originalLine !== modifiedLine) {
+        diffOutput += `- ${originalLine}\n+ ${modifiedLine}\n`;
+      }
+    }
+    
+    const prReviewResult = {
+      content: [{
+        text: diffOutput
+      }]
+    };
     
     console.log('prReview prompt result:');
     console.log(prReviewResult.content[0].text);
