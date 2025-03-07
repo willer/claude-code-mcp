@@ -101,34 +101,49 @@ async function main() {
     console.log('Search results for "McpServer":');
     console.log(grepResult.content[0].text);
     
-    // Example 2: Using resources
-    console.log('\nExample 2: Using resources');
+    // Example 2: Using tools for file operations instead of resources
+    console.log('\nExample 2: Using tools for file operations');
     
-    // Step 1: Access a file through the file resource
-    console.log('Step 1: Accessing a file through the file resource');
+    // Step 1: Read a file using the readFile tool
+    console.log('Step 1: Reading a file using the readFile tool');
     const packageJsonPath = path.join(projectRoot, 'package.json');
     
-    const fileResource = await client.readResource(`file://${packageJsonPath}`);
-    console.log('File resource content:');
-    console.log(fileResource.contents[0].text.substring(0, 200) + '...');
+    const readFileResult = await client.callTool({
+      name: 'readFile',
+      arguments: {
+        file_path: packageJsonPath
+      }
+    });
     
-    // Step 2: List directory contents through the directory resource
-    console.log('\nStep 2: Listing directory contents through the directory resource');
+    console.log('File content:');
+    console.log(readFileResult.content[0].text.substring(0, 200) + '...');
+    
+    // Step 2: List directory contents using the listFiles tool
+    console.log('\nStep 2: Listing directory contents using the listFiles tool');
     const srcPath = path.join(projectRoot, 'src');
     
-    const dirResource = await client.readResource(`dir://${srcPath}`);
-    console.log('Directory resource content:');
-    const dirContent = JSON.parse(dirResource.contents[0].text);
+    const listFilesResult = await client.callTool({
+      name: 'listFiles',
+      arguments: {
+        path: srcPath
+      }
+    });
+    
+    console.log('Directory content:');
+    const dirContent = JSON.parse(listFilesResult.content[0].text);
     console.log(`Found ${dirContent.length} items in the src directory`);
     
-    // Step 3: Get environment information
-    console.log('\nStep 3: Getting environment information');
-    const envResource = await client.readResource('env://info');
-    console.log('Environment resource content:');
-    const envInfo = JSON.parse(envResource.contents[0].text);
-    console.log(`Node.js version: ${envInfo.node}`);
-    console.log(`npm version: ${envInfo.npm}`);
-    console.log(`OS: ${envInfo.os}`);
+    // Step 3: Get system information using the bash tool
+    console.log('\nStep 3: Getting system information using the bash tool');
+    const nodeVersionResult = await client.callTool({
+      name: 'bash',
+      arguments: {
+        command: 'node --version && npm --version && uname -a'
+      }
+    });
+    
+    console.log('System information:');
+    console.log(nodeVersionResult.content[0].text);
     
     // Example 3: Creating and modifying files
     console.log('\nExample 3: Creating and modifying files');
