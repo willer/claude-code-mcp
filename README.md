@@ -38,7 +38,7 @@ By implementing Claude Code as an MCP server, we make its capabilities available
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/claude-code-mcp.git
+git clone https://github.com/auchenberg/claude-code-mcp.git
 cd claude-code-mcp
 
 # Install dependencies
