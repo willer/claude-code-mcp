@@ -68,11 +68,11 @@ async function main() {
     console.log('\nExample 1: Using the generalCLI prompt for a simple task');
     
     try {
-      // Use callTool instead of callPrompt as the MCP SDK doesn't have a callPrompt method
-      const generalCliResult = await client.callTool({
-        name: 'generalCLI',
+      // Use complete method for prompts instead of callTool
+      const generalCliResult = await client.complete({
+        prompt: 'generalCLI',
         arguments: {
-          query: 'List all JavaScript files in the current directory and count how many lines each one has.'
+          message: 'List all JavaScript files in the current directory and count how many lines each one has.'
         }
       });
       
@@ -121,12 +121,11 @@ module.exports = {
       const codeFilePath = path.join(tempDir, 'shopping-cart.js');
       await fs.writeFile(codeFilePath, codeToReview);
       
-      // Use callTool instead of callPrompt as the MCP SDK doesn't have a callPrompt method
-      const codeReviewResult = await client.callTool({
-        name: 'codeReview',
+      // Use complete method for prompts instead of callTool
+      const codeReviewResult = await client.complete({
+        prompt: 'codeReview',
         arguments: {
-          file_path: codeFilePath,
-          review_focus: 'Identify potential bugs, security issues, and suggest improvements'
+          code: await fs.readFile(codeFilePath, 'utf-8')
         }
       });
       
@@ -261,13 +260,10 @@ describe('Product', () => {
     
     await fs.writeFile(path.join(projectDir, 'package.json'), packageJson);
     
-    // Use callTool instead of callPrompt as the MCP SDK doesn't have a callPrompt method
-    const initCodebaseResult = await client.callTool({
-      name: 'initCodebase',
-      arguments: {
-        project_path: projectDir,
-        focus_areas: 'Architecture, main components, and data flow'
-      }
+    // Use complete method for prompts instead of callTool
+    const initCodebaseResult = await client.complete({
+      prompt: 'initCodebase',
+      arguments: {}
     });
     
     console.log('initCodebase prompt result:');
@@ -340,13 +336,11 @@ module.exports = {
     await fs.writeFile(originalFilePath, originalFile);
     await fs.writeFile(modifiedFilePath, modifiedFile);
     
-    // Use callTool instead of callPrompt as the MCP SDK doesn't have a callPrompt method
-    const prReviewResult = await client.callTool({
-      name: 'prReview',
+    // Use complete method for prompts instead of callTool
+    const prReviewResult = await client.complete({
+      prompt: 'prReview',
       arguments: {
-        original_file: originalFilePath,
-        modified_file: modifiedFilePath,
-        review_focus: 'Code quality, error handling, and new functionality'
+        prNumber: '1' // Using a sample PR number
       }
     });
     
@@ -359,8 +353,10 @@ module.exports = {
     // Clean up
     console.log('\nCleaning up temporary files...');
     try {
-      await fs.rm(tempDir, { recursive: true, force: true });
-      console.log('Temporary files removed');
+      if (tempDir) {
+        await fs.rm(tempDir, { recursive: true, force: true });
+        console.log('Temporary files removed');
+      }
     } catch (error) {
       console.error('Error removing temporary files:', error);
     }
