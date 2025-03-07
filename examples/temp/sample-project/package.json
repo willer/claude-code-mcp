@@ -1,0 +1,17 @@
+
+{
+  "name": "sample-project",
+  "version": "1.0.0",
+  "description": "A sample project for demonstrating Claude Code MCP",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "mocha tests/**/*.test.js"
+  },
+  "dependencies": {
+    "express": "^4.17.1"
+  },
+  "devDependencies": {
+    "mocha": "^9.1.3"
+  }
+}

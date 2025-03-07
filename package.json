@@ -8,7 +8,9 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node --esm src/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node test/tools.test.js && node test/resources.test.js",
+    "test:tools": "node test/tools.test.js",
+    "test:resources": "node test/resources.test.js",
     "lint": "eslint src/**/*.ts"
   },
   "keywords": [
@@ -23,7 +25,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/claude-code-mcp.git"
+    "url": "https://github.com/auchenberg/claude-code-mcp.git"
   },
   "engines": {
     "node": ">=18"
