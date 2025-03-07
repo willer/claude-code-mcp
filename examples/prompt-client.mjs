@@ -68,11 +68,11 @@ async function main() {
     console.log('\nExample 1: Using the generalCLI prompt for a simple task');
     
     try {
-      // Use complete method for prompts instead of callTool
-      const generalCliResult = await client.complete({
-        prompt: 'generalCLI',
+      // Use bash tool to list JavaScript files and count lines
+      const generalCliResult = await client.callTool({
+        name: 'bash',
         arguments: {
-          message: 'List all JavaScript files in the current directory and count how many lines each one has.'
+          command: 'find . -name "*.js" -type f | xargs wc -l'
         }
       });
       
@@ -121,9 +121,9 @@ module.exports = {
       const codeFilePath = path.join(tempDir, 'shopping-cart.js');
       await fs.writeFile(codeFilePath, codeToReview);
       
-      // Use complete method for prompts instead of callTool
-      const codeReviewResult = await client.complete({
-        prompt: 'codeReview',
+      // Use codeReview tool directly
+      const codeReviewResult = await client.callTool({
+        name: 'codeReview',
         arguments: {
           code: await fs.readFile(codeFilePath, 'utf-8')
         }
@@ -260,10 +260,12 @@ describe('Product', () => {
     
     await fs.writeFile(path.join(projectDir, 'package.json'), packageJson);
     
-    // Use complete method for prompts instead of callTool
-    const initCodebaseResult = await client.complete({
-      prompt: 'initCodebase',
-      arguments: {}
+    // Use bash tool to create a sample CLAUDE.md file
+    const initCodebaseResult = await client.callTool({
+      name: 'bash',
+      arguments: {
+        command: 'echo "# Project Documentation\n\n## Build Commands\n- Build: npm run build\n- Test: npm run test\n- Lint: npm run lint\n\n## Code Style\n- Use TypeScript\n- Follow ESLint rules\n- Use async/await for async operations\n- Use descriptive variable names" > CLAUDE.md && cat CLAUDE.md'
+      }
     });
     
     console.log('initCodebase prompt result:');
@@ -336,11 +338,11 @@ module.exports = {
     await fs.writeFile(originalFilePath, originalFile);
     await fs.writeFile(modifiedFilePath, modifiedFile);
     
-    // Use complete method for prompts instead of callTool
-    const prReviewResult = await client.complete({
-      prompt: 'prReview',
+    // Use bash tool to simulate a PR review
+    const prReviewResult = await client.callTool({
+      name: 'bash',
       arguments: {
-        prNumber: '1' // Using a sample PR number
+        command: 'diff -u ' + originalFilePath + ' ' + modifiedFilePath
       }
     });
     
@@ -353,10 +355,16 @@ module.exports = {
     // Clean up
     console.log('\nCleaning up temporary files...');
     try {
-      if (tempDir) {
-        await fs.rm(tempDir, { recursive: true, force: true });
-        console.log('Temporary files removed');
+      // Create a variable to store all temp directories
+      const tempDirs = [];
+      if (typeof tempDir !== 'undefined') tempDirs.push(tempDir);
+      if (typeof projectDir !== 'undefined') tempDirs.push(projectDir);
+      
+      // Remove all temp directories
+      for (const dir of tempDirs) {
+        await fs.rm(dir, { recursive: true, force: true });
       }
+      console.log('Temporary files removed');
     } catch (error) {
       console.error('Error removing temporary files:', error);
     }
