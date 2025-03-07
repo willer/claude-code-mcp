@@ -84,11 +84,12 @@ async function main() {
     // Example 2: Using the codeReview prompt to analyze code
     console.log('\nExample 2: Using the codeReview prompt to analyze code');
     
-    // Create a temporary file with some code to review
-    const tempDir = path.join(__dirname, 'temp');
-    await fs.mkdir(tempDir, { recursive: true });
-    
-    const codeToReview = `
+    try {
+      // Create a temporary file with some code to review
+      const tempDir = path.join(__dirname, 'temp');
+      await fs.mkdir(tempDir, { recursive: true });
+      
+      const codeToReview = `
 function calculateTotal(items) {
   let total = 0;
   for (let i = 0; i < items.length; i++) {
@@ -115,20 +116,23 @@ module.exports = {
   applyDiscount
 };
 `;
-    
-    const codeFilePath = path.join(tempDir, 'shopping-cart.js');
-    await fs.writeFile(codeFilePath, codeToReview);
-    
-    const codeReviewResult = await client.callPrompt({
-      name: 'codeReview',
-      arguments: {
-        file_path: codeFilePath,
-        review_focus: 'Identify potential bugs, security issues, and suggest improvements'
-      }
-    });
-    
-    console.log('codeReview prompt result:');
-    console.log(codeReviewResult.content[0].text);
+      
+      const codeFilePath = path.join(tempDir, 'shopping-cart.js');
+      await fs.writeFile(codeFilePath, codeToReview);
+      
+      const codeReviewResult = await client.callPrompt({
+        name: 'codeReview',
+        arguments: {
+          file_path: codeFilePath,
+          review_focus: 'Identify potential bugs, security issues, and suggest improvements'
+        }
+      });
+      
+      console.log('codeReview prompt result:');
+      console.log(codeReviewResult.content[0].text);
+    } catch (error) {
+      console.error('Error calling codeReview prompt:', error.message);
+    }
     
     // Example 3: Using the initCodebase prompt to understand a codebase
     console.log('\nExample 3: Using the initCodebase prompt to understand a codebase');
