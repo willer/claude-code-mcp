@@ -78,21 +78,38 @@ async function main() {
         }
       });
       
-      const jsFiles = JSON.parse(searchResult.content[0].text);
+      // Parse the result, handling potential JSON parsing errors
+      let jsFiles = [];
+      try {
+        jsFiles = JSON.parse(searchResult.content[0].text);
+      } catch (error) {
+        console.error('Error parsing search result:', error.message);
+        console.log('Raw search result:', searchResult.content[0].text);
+        // Use a simple fallback approach
+        jsFiles = searchResult.content[0].text.split('\n')
+          .filter(line => line.trim().endsWith('.js'))
+          .map(line => line.trim());
+      }
+      
       console.log(`Found ${jsFiles.length} JavaScript files`);
       
       // Count lines in each file
       let fileStats = [];
       for (const file of jsFiles.slice(0, 5)) { // Limit to first 5 files for brevity
-        const fileContent = await client.callTool({
-          name: 'readFile',
-          arguments: {
-            file_path: file
-          }
-        });
-        
-        const lineCount = fileContent.content[0].text.split('\n').length;
-        fileStats.push({ file, lineCount });
+        try {
+          const fileContent = await client.callTool({
+            name: 'readFile',
+            arguments: {
+              file_path: file
+            }
+          });
+          
+          const lineCount = fileContent.content[0].text.split('\n').length;
+          fileStats.push({ file, lineCount });
+        } catch (error) {
+          console.error(`Error reading file ${file}:`, error.message);
+          fileStats.push({ file, error: error.message });
+        }
       }
       
       const generalCliResult = {
