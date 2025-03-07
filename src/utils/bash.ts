@@ -23,17 +23,27 @@ export class CommandExecutionError extends Error {
  * Execute a shell command and return the output
  * @param command The shell command to execute
  * @param timeout Optional timeout in milliseconds (defaults to 60000ms, max 600000ms)
+ * @param maxOutput Optional maximum output size in bytes (defaults to 1048576, max 10485760)
  * @returns The command output (stdout)
  * @throws {CommandExecutionError} If the command fails to execute
  */
-export async function executeCommand(command: string, timeout?: number): Promise<string> {
+export async function executeCommand(
+  command: string, 
+  timeout?: number,
+  maxOutput?: number
+): Promise<string> {
   // Validate and limit timeout
-  const maxTimeout = 600000; // 10 minutes
-  const defaultTimeout = 60000; // 1 minute
-  const validatedTimeout = timeout ? Math.min(timeout, maxTimeout) : defaultTimeout;
+  const MAX_TIMEOUT = 600000; // 10 minutes
+  const DEFAULT_TIMEOUT = 60000; // 1 minute
+  const validatedTimeout = timeout ? Math.min(timeout, MAX_TIMEOUT) : DEFAULT_TIMEOUT;
+  
+  // Validate and limit output size
+  const MAX_OUTPUT_SIZE = 10485760; // 10 MB
+  const DEFAULT_OUTPUT_SIZE = 1048576; // 1 MB
+  const validatedMaxOutput = maxOutput ? Math.min(maxOutput, MAX_OUTPUT_SIZE) : DEFAULT_OUTPUT_SIZE;
   
   try {
-    const options = { timeout: validatedTimeout };
+    const options = { timeout: validatedTimeout, maxBuffer: validatedMaxOutput };
     const { stdout, stderr } = await execPromise(command, options);
     
     // Log stderr but don't fail if it's present (many commands output to stderr even on success)

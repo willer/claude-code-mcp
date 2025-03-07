@@ -8,15 +8,17 @@ import { readFile, listFiles, searchGlob, grepSearch, writeFile, FileSystemError
  * @param server The MCP server instance to configure
  */
 export function setupTools(server: McpServer): void {
-  // Bash Tool - Allows executing shell commands
+  // Bash Tool - Allows executing shell commands with security restrictions
   server.tool(
     "bash",
-    "Execute a shell command with security restrictions",
+    "Execute a shell command with security restrictions and resource limits",
     {
       command: z.string().describe("The shell command to execute"),
-      timeout: z.number().optional().describe("Optional timeout in milliseconds (max 600000)")
+      timeout: z.number().optional().describe("Optional timeout in milliseconds (max 600000)"),
+      max_output: z.number().optional().describe("Maximum output size in bytes (max 10485760)"),
+      allow_network: z.boolean().optional().describe("Whether to allow network access (default: false)")
     },
-    async ({ command, timeout }) => {
+    async ({ command, timeout, max_output, allow_network }) => {
       try {
         // Validate input
         if (!command || command.trim() === '') {
@@ -30,16 +32,49 @@ export function setupTools(server: McpServer): void {
         }
 
         // Check for banned commands and command injection attempts
+        // Comprehensive list of potentially dangerous commands
         const bannedCommands = [
-          'alias', 'curl', 'curlie', 'wget', 'axel', 'aria2c', 'nc', 'telnet',
-          'lynx', 'w3m', 'links', 'httpie', 'xh', 'http-prompt', 'chrome', 'firefox', 'safari',
-          'ssh', 'scp', 'sftp', 'ftp', 'rsync', 'nmap', 'netcat', 'ncat'
+          // Network tools
+          'curl', 'curlie', 'wget', 'axel', 'aria2c', 'nc', 'netcat', 'ncat', 'telnet', 
+          'nmap', 'wireshark', 'tcpdump', 'iptables', 'ip6tables', 'ufw', 'firewall-cmd',
+          
+          // Web browsers and HTTP clients
+          'lynx', 'w3m', 'links', 'httpie', 'xh', 'http-prompt', 'chrome', 'chromium',
+          'firefox', 'safari', 'opera', 'brave', 'edge',
+          
+          // Remote access
+          'ssh', 'scp', 'sftp', 'ftp', 'rsync', 'rcp', 'rdp', 'rdesktop', 'vnc', 'teamviewer',
+          
+          // System modification
+          'sudo', 'su', 'doas', 'chown', 'chmod', 'chgrp', 'chroot', 'mount', 'umount',
+          'mkfs', 'fdisk', 'parted', 'dd', 'mkswap', 'swapon', 'swapoff',
+          
+          // Process control
+          'kill', 'killall', 'pkill', 'reboot', 'shutdown', 'halt', 'poweroff', 'systemctl',
+          'service', 'init', 'crontab', 'at',
+          
+          // Shell and environment
+          'alias', 'export', 'source', 'eval', 'exec', 'env', 'setenv', 'unset',
+          
+          // Package management
+          'apt', 'apt-get', 'aptitude', 'dpkg', 'yum', 'dnf', 'rpm', 'pacman', 'brew',
+          'pip', 'pip3', 'npm', 'yarn', 'gem', 'cargo',
+          
+          // User management
+          'useradd', 'userdel', 'usermod', 'groupadd', 'groupdel', 'groupmod', 'passwd',
+          
+          // Potentially dangerous utilities
+          'nohup', 'screen', 'tmux', 'bg', 'fg', 'nice', 'ionice', 'chrt', 'timeout',
+          
+          // File deletion/modification
+          'shred', 'wipe', 'srm', 'rm -rf', 'mkfifo'
         ];
         
+        // Extract the base command and check against banned list
         const commandParts = command.split(' ');
         const baseCommand = commandParts[0];
         
-        // Check for banned commands
+        // Check for banned commands (exact match)
         if (bannedCommands.includes(baseCommand)) {
           return {
             content: [{ 
@@ -50,11 +85,46 @@ export function setupTools(server: McpServer): void {
           };
         }
         
-        // Check for command injection attempts
+        // Check for banned commands with arguments (partial match)
+        for (const bannedCmd of bannedCommands) {
+          // Check if the command starts with a banned command followed by a space or end of string
+          if (command.match(new RegExp(`^${bannedCmd}(\\s|$)`))) {
+            return {
+              content: [{ 
+                type: "text", 
+                text: `Error: The command '${bannedCmd}' is not allowed for security reasons.`
+              }],
+              isError: true
+            };
+          }
+        }
+        
+        // Check for command injection attempts and other dangerous patterns
         const dangerousPatterns = [
-          /[;&|]/, // Shell command separators
+          // Shell command separators and operators
+          /[;&|]/, // Command separators and pipes
           /`.*`/,  // Backtick command substitution
-          /\$\(.*\)/ // Command substitution
+          /\$\(.*\)/, // Command substitution
+          />\s*\S+/, // Output redirection
+          /<\s*\S+/, // Input redirection
+          /2>\s*\S+/, // Error redirection
+          
+          // Potentially dangerous shell expansions
+          /\$\{.*\}/, // Parameter expansion
+          /\$[a-zA-Z0-9_]+/, // Variable expansion
+          
+          // Wildcards that could lead to unexpected behavior
+          /\s\*\s/, // Standalone asterisk
+          
+          // Potentially dangerous flags
+          /-[a-z]*r[a-z]*\s/, // Recursive flag (like rm -r)
+          /-[a-z]*f[a-z]*\s/, // Force flag (like rm -f)
+          
+          // Specific dangerous command patterns
+          /rm\s+(-[a-z]*[fr][a-z]*\s+)*\//, // rm with path starting with /
+          /dd\s+.*if=.*of=/, // dd with if and of parameters
+          /wget\s+.*-O\s+/, // wget with output file
+          /curl\s+.*-o\s+/ // curl with output file
         ];
         
         for (const pattern of dangerousPatterns) {
@@ -62,18 +132,75 @@ export function setupTools(server: McpServer): void {
             return {
               content: [{ 
                 type: "text", 
-                text: `Error: Potentially dangerous command pattern detected. Please use simple commands without shell operators.`
+                text: `Error: Potentially dangerous command pattern detected: "${pattern.toString()}". Please use simple commands without shell operators, redirections, or dangerous flags.`
               }],
               isError: true
             };
           }
         }
         
-        // Execute the command with the validated timeout
-        const result = await executeCommand(command, timeout);
-        return {
-          content: [{ type: "text", text: result }]
-        };
+        // Check command length to prevent very long commands
+        const MAX_COMMAND_LENGTH = 500;
+        if (command.length > MAX_COMMAND_LENGTH) {
+          return {
+            content: [{ 
+              type: "text", 
+              text: `Error: Command is too long (${command.length} characters). Maximum allowed length is ${MAX_COMMAND_LENGTH} characters.`
+            }],
+            isError: true
+          };
+        }
+        
+        // Validate and apply timeout limits
+        const MAX_TIMEOUT = 600000; // 10 minutes
+        const DEFAULT_TIMEOUT = 60000; // 1 minute
+        const validatedTimeout = timeout ? Math.min(timeout, MAX_TIMEOUT) : DEFAULT_TIMEOUT;
+        
+        // Validate and apply output size limits
+        const MAX_OUTPUT_SIZE = 10485760; // 10 MB
+        const DEFAULT_OUTPUT_SIZE = 1048576; // 1 MB
+        const validatedMaxOutput = max_output ? Math.min(max_output, MAX_OUTPUT_SIZE) : DEFAULT_OUTPUT_SIZE;
+        
+        // Apply network access restrictions if needed
+        if (allow_network !== true) {
+          // If network access is not explicitly allowed, check for network-related commands
+          const networkCommands = ['ping', 'traceroute', 'dig', 'nslookup', 'host', 'whois', 'netstat', 'ss', 'ifconfig', 'ip'];
+          
+          for (const netCmd of networkCommands) {
+            if (command.match(new RegExp(`^${netCmd}(\\s|$)`))) {
+              return {
+                content: [{ 
+                  type: "text", 
+                  text: `Error: Network command '${netCmd}' requires 'allow_network: true' parameter.`
+                }],
+                isError: true
+              };
+            }
+          }
+        }
+        
+        // Execute the command with the validated parameters
+        try {
+          // Pass both timeout and maxOutput to executeCommand
+          const result = await executeCommand(command, validatedTimeout, validatedMaxOutput);
+          return {
+            content: [{ type: "text", text: result }]
+          };
+        } catch (error) {
+          // Handle timeout errors specifically
+          if (error instanceof Error && error.message.includes('timeout')) {
+            return {
+              content: [{ 
+                type: "text", 
+                text: `Command timed out after ${validatedTimeout}ms. Consider increasing the timeout parameter or breaking the command into smaller parts.`
+              }],
+              isError: true
+            };
+          }
+          
+          // Let the catch block below handle other errors
+          throw error;
+        }
       } catch (error) {
         // Handle specific error types
         if (error instanceof CommandExecutionError) {
@@ -86,11 +213,33 @@ export function setupTools(server: McpServer): void {
           };
         }
         
-        // Generic error handling
+        // Handle Error objects
+        if (error instanceof Error) {
+          return {
+            content: [{ 
+              type: "text", 
+              text: `Command execution error: ${error.message}`
+            }],
+            isError: true
+          };
+        }
+        
+        // Handle Error objects
+        if (error instanceof Error) {
+          return {
+            content: [{ 
+              type: "text", 
+              text: `Error executing command: ${error.message}`
+            }],
+            isError: true
+          };
+        }
+        
+        // Generic error handling for unknown error types
         return {
           content: [{ 
             type: "text", 
-            text: `Error executing command: ${error instanceof Error ? error.message : String(error)}`
+            text: `Error executing command: ${String(error)}`
           }],
           isError: true
         };
@@ -265,6 +414,17 @@ export function setupTools(server: McpServer): void {
           };
         }
         
+        // Handle Error objects
+        if (error instanceof Error) {
+          return {
+            content: [{ 
+              type: "text", 
+              text: `Command execution error: ${error.message}`
+            }],
+            isError: true
+          };
+        }
+        
         if (error instanceof FileSystemError) {
           return {
             content: [{ 
@@ -275,11 +435,22 @@ export function setupTools(server: McpServer): void {
           };
         }
         
-        // Generic error handling
+        // Handle Error objects
+        if (error instanceof Error) {
+          return {
+            content: [{ 
+              type: "text", 
+              text: `Error searching for files: ${error.message}`
+            }],
+            isError: true
+          };
+        }
+        
+        // Generic error handling for unknown error types
         return {
           content: [{ 
             type: "text", 
-            text: `Error searching for files: ${error instanceof Error ? error.message : String(error)}`
+            text: `Error searching for files: ${String(error)}`
           }],
           isError: true
         };
@@ -338,11 +509,33 @@ export function setupTools(server: McpServer): void {
           };
         }
         
-        // Generic error handling
+        // Handle Error objects
+        if (error instanceof Error) {
+          return {
+            content: [{ 
+              type: "text", 
+              text: `Command execution error: ${error.message}`
+            }],
+            isError: true
+          };
+        }
+        
+        // Handle Error objects
+        if (error instanceof Error) {
+          return {
+            content: [{ 
+              type: "text", 
+              text: `Error searching for text: ${error.message}`
+            }],
+            isError: true
+          };
+        }
+        
+        // Generic error handling for unknown error types
         return {
           content: [{ 
             type: "text", 
-            text: `Error searching for text: ${error instanceof Error ? error.message : String(error)}`
+            text: `Error searching for text: ${String(error)}`
           }],
           isError: true
         };
@@ -377,11 +570,22 @@ export function setupTools(server: McpServer): void {
           }]
         };
       } catch (error) {
-        // Generic error handling
+        // Handle Error objects
+        if (error instanceof Error) {
+          return {
+            content: [{ 
+              type: "text", 
+              text: `Error processing thought: ${error.message}`
+            }],
+            isError: true
+          };
+        }
+        
+        // Generic error handling for unknown error types
         return {
           content: [{ 
             type: "text", 
-            text: `Error processing thought: ${error instanceof Error ? error.message : String(error)}`
+            text: `Error processing thought: ${String(error)}`
           }],
           isError: true
         };
@@ -418,11 +622,22 @@ export function setupTools(server: McpServer): void {
           }]
         };
       } catch (error) {
-        // Generic error handling
+        // Handle Error objects
+        if (error instanceof Error) {
+          return {
+            content: [{ 
+              type: "text", 
+              text: `Error reviewing code: ${error.message}`
+            }],
+            isError: true
+          };
+        }
+        
+        // Generic error handling for unknown error types
         return {
           content: [{ 
             type: "text", 
-            text: `Error reviewing code: ${error instanceof Error ? error.message : String(error)}`
+            text: `Error reviewing code: ${String(error)}`
           }],
           isError: true
         };
