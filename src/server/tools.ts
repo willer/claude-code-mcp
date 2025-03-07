@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { executeCommand } from "../utils/bash.js";
+import { executeCommand } from "../utils/bash.js"; // Using .js extension for ESM compatibility
+import { readFile, listFiles, searchGlob, grepSearch, writeFile } from "../utils/file.js";
 
 /**
  * Sets up Claude Code tools on the provided MCP server
@@ -12,11 +13,29 @@ export function setupTools(server: McpServer): void {
     "bash",
     "Execute a shell command",
     {
-      command: z.string().describe("The shell command to execute")
+      command: z.string().describe("The shell command to execute"),
+      timeout: z.number().optional().describe("Optional timeout in milliseconds (max 600000)")
     },
-    async ({ command }) => {
+    async ({ command, timeout }) => {
       try {
-        const result = await executeCommand(command);
+        // Check for banned commands
+        const bannedCommands = [
+          'alias', 'curl', 'curlie', 'wget', 'axel', 'aria2c', 'nc', 'telnet',
+          'lynx', 'w3m', 'links', 'httpie', 'xh', 'http-prompt', 'chrome', 'firefox', 'safari'
+        ];
+        
+        const commandParts = command.split(' ');
+        if (bannedCommands.includes(commandParts[0])) {
+          return {
+            content: [{ 
+              type: "text", 
+              text: `Error: The command '${commandParts[0]}' is not allowed for security reasons.`
+            }],
+            isError: true
+          };
+        }
+        
+        const result = await executeCommand(command, timeout);
         return {
           content: [{ type: "text", text: result }]
         };
@@ -43,11 +62,9 @@ export function setupTools(server: McpServer): void {
     },
     async ({ file_path, offset, limit }) => {
       try {
-        // Implementation will be added in the utils/file.js module
-        const command = `cat ${file_path}${offset ? ` | tail -n +${offset}` : ''}${limit ? ` | head -n ${limit}` : ''}`;
-        const result = await executeCommand(command);
+        const content = await readFile(file_path, offset, limit);
         return {
-          content: [{ type: "text", text: result }]
+          content: [{ type: "text", text: content }]
         };
       } catch (error) {
         return {
@@ -70,9 +87,9 @@ export function setupTools(server: McpServer): void {
     },
     async ({ path }) => {
       try {
-        const result = await executeCommand(`ls -la ${path}`);
+        const files = await listFiles(path);
         return {
-          content: [{ type: "text", text: result }]
+          content: [{ type: "text", text: JSON.stringify(files, null, 2) }]
         };
       } catch (error) {
         return {
@@ -86,19 +103,19 @@ export function setupTools(server: McpServer): void {
     }
   );
 
-  // Search Files Tool - Search for files matching a pattern
+  // Search Glob Tool - Search for files matching a pattern
   server.tool(
-    "searchFiles",
+    "searchGlob",
     "Search for files matching a pattern",
     {
-      path: z.string().describe("The directory to search in"),
-      pattern: z.string().describe("The glob pattern to search for")
+      pattern: z.string().describe("The glob pattern to match files against"),
+      path: z.string().optional().describe("The directory to search in. Defaults to the current working directory.")
     },
-    async ({ path, pattern }) => {
+    async ({ pattern, path }) => {
       try {
-        const result = await executeCommand(`find ${path} -name "${pattern}"`);
+        const results = await searchGlob(pattern, path);
         return {
-          content: [{ type: "text", text: result }]
+          content: [{ type: "text", text: results.join('\n') }]
         };
       } catch (error) {
         return {
@@ -117,14 +134,90 @@ export function setupTools(server: McpServer): void {
     "grep",
     "Search for text in files",
     {
-      pattern: z.string().describe("The pattern to search for"),
-      path: z.string().describe("The file or directory to search in")
+      pattern: z.string().describe("The regular expression pattern to search for in file contents"),
+      path: z.string().optional().describe("The directory to search in. Defaults to the current working directory."),
+      include: z.string().optional().describe("File pattern to include in the search (e.g. \"*.js\", \"*.{ts,tsx}\")")
     },
-    async ({ pattern, path }) => {
+    async ({ pattern, path, include }) => {
       try {
-        const result = await executeCommand(`grep -r "${pattern}" ${path}`);
+        const results = await grepSearch(pattern, path, include);
         return {
-          content: [{ type: "text", text: result }]
+          content: [{ type: "text", text: results }]
+        };
+      } catch (error) {
+        return {
+          content: [{ 
+            type: "text", 
+            text: error instanceof Error ? error.message : String(error)
+          }],
+          isError: true
+        };
+      }
+    }
+  );
+
+  // Think Tool - No-op tool for thinking/reasoning
+  server.tool(
+    "think",
+    "A tool for thinking through complex problems",
+    {
+      thought: z.string().describe("Your thoughts")
+    },
+    async ({ thought }) => {
+      return {
+        content: [{ 
+          type: "text", 
+          text: `Thought process: ${thought}`
+        }]
+      };
+    }
+  );
+
+  // Code Review Tool - Analyze and review code
+  server.tool(
+    "codeReview",
+    "Review code for bugs, security issues, and best practices",
+    {
+      code: z.string().describe("The code to review")
+    },
+    async ({ code }) => {
+      try {
+        // In a real implementation, this would call an LLM to review the code
+        // For now, we'll just return a placeholder message
+        return {
+          content: [{ 
+            type: "text", 
+            text: "Code review functionality will be handled by the LLM through prompts."
+          }]
+        };
+      } catch (error) {
+        return {
+          content: [{ 
+            type: "text", 
+            text: error instanceof Error ? error.message : String(error)
+          }],
+          isError: true
+        };
+      }
+    }
+  );
+
+  // File Edit Tool - Create or edit files
+  server.tool(
+    "editFile",
+    "Create or edit a file",
+    {
+      file_path: z.string().describe("The absolute path to the file to edit"),
+      content: z.string().describe("The new content for the file")
+    },
+    async ({ file_path, content }) => {
+      try {
+        await writeFile(file_path, content);
+        return {
+          content: [{ 
+            type: "text", 
+            text: `File ${file_path} has been updated.`
+          }]
         };
       } catch (error) {
         return {
