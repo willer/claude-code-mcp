@@ -67,15 +67,19 @@ async function main() {
     // Example 1: Using the generalCLI prompt for a simple task
     console.log('\nExample 1: Using the generalCLI prompt for a simple task');
     
-    const generalCliResult = await client.callPrompt({
-      name: 'generalCLI',
-      arguments: {
-        query: 'List all JavaScript files in the current directory and count how many lines each one has.'
-      }
-    });
-    
-    console.log('generalCLI prompt result:');
-    console.log(generalCliResult.content[0].text);
+    try {
+      const generalCliResult = await client.callPrompt({
+        name: 'generalCLI',
+        arguments: {
+          query: 'List all JavaScript files in the current directory and count how many lines each one has.'
+        }
+      });
+      
+      console.log('generalCLI prompt result:');
+      console.log(generalCliResult.content[0].text);
+    } catch (error) {
+      console.error('Error calling generalCLI prompt:', error.message);
+    }
     
     // Example 2: Using the codeReview prompt to analyze code
     console.log('\nExample 2: Using the codeReview prompt to analyze code');

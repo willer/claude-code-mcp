@@ -108,7 +108,7 @@ async function main() {
     console.log('Step 1: Accessing a file through the file resource');
     const packageJsonPath = path.join(projectRoot, 'package.json');
     
-    const fileResource = await client.getResource(`file://${packageJsonPath}`);
+    const fileResource = await client.readResource(`file://${packageJsonPath}`);
     console.log('File resource content:');
     console.log(fileResource.contents[0].text.substring(0, 200) + '...');
     
@@ -116,14 +116,14 @@ async function main() {
     console.log('\nStep 2: Listing directory contents through the directory resource');
     const srcPath = path.join(projectRoot, 'src');
     
-    const dirResource = await client.getResource(`dir://${srcPath}`);
+    const dirResource = await client.readResource(`dir://${srcPath}`);
     console.log('Directory resource content:');
     const dirContent = JSON.parse(dirResource.contents[0].text);
     console.log(`Found ${dirContent.length} items in the src directory`);
     
     // Step 3: Get environment information
     console.log('\nStep 3: Getting environment information');
-    const envResource = await client.getResource('env://info');
+    const envResource = await client.readResource('env://info');
     console.log('Environment resource content:');
     const envInfo = JSON.parse(envResource.contents[0].text);
     console.log(`Node.js version: ${envInfo.node}`);
