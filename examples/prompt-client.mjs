@@ -68,7 +68,8 @@ async function main() {
     console.log('\nExample 1: Using the generalCLI prompt for a simple task');
     
     try {
-      const generalCliResult = await client.callPrompt({
+      // Use callTool instead of callPrompt as the MCP SDK doesn't have a callPrompt method
+      const generalCliResult = await client.callTool({
         name: 'generalCLI',
         arguments: {
           query: 'List all JavaScript files in the current directory and count how many lines each one has.'
@@ -120,7 +121,8 @@ module.exports = {
       const codeFilePath = path.join(tempDir, 'shopping-cart.js');
       await fs.writeFile(codeFilePath, codeToReview);
       
-      const codeReviewResult = await client.callPrompt({
+      // Use callTool instead of callPrompt as the MCP SDK doesn't have a callPrompt method
+      const codeReviewResult = await client.callTool({
         name: 'codeReview',
         arguments: {
           file_path: codeFilePath,
@@ -137,8 +139,11 @@ module.exports = {
     // Example 3: Using the initCodebase prompt to understand a codebase
     console.log('\nExample 3: Using the initCodebase prompt to understand a codebase');
     
-    // Create a simple project structure for demonstration
-    const projectDir = path.join(tempDir, 'sample-project');
+    try {
+      // Create a simple project structure for demonstration
+      const tempDir = path.join(__dirname, 'temp');
+      await fs.mkdir(tempDir, { recursive: true });
+      const projectDir = path.join(tempDir, 'sample-project');
     await fs.mkdir(projectDir, { recursive: true });
     await fs.mkdir(path.join(projectDir, 'src'), { recursive: true });
     await fs.mkdir(path.join(projectDir, 'tests'), { recursive: true });
@@ -256,7 +261,8 @@ describe('Product', () => {
     
     await fs.writeFile(path.join(projectDir, 'package.json'), packageJson);
     
-    const initCodebaseResult = await client.callPrompt({
+    // Use callTool instead of callPrompt as the MCP SDK doesn't have a callPrompt method
+    const initCodebaseResult = await client.callTool({
       name: 'initCodebase',
       arguments: {
         project_path: projectDir,
@@ -266,12 +272,18 @@ describe('Product', () => {
     
     console.log('initCodebase prompt result:');
     console.log(initCodebaseResult.content[0].text);
+  } catch (error) {
+    console.error('Error calling initCodebase prompt:', error.message);
+  }
     
     // Example 4: Using the prReview prompt to review a pull request
     console.log('\nExample 4: Using the prReview prompt to review code changes');
     
-    // Create files to simulate a PR
-    const originalFile = `
+    try {
+      // Create files to simulate a PR
+      const tempDir = path.join(__dirname, 'temp');
+      await fs.mkdir(tempDir, { recursive: true });
+      const originalFile = `
 function calculatePrice(product, quantity) {
   return product.price * quantity;
 }
@@ -328,7 +340,8 @@ module.exports = {
     await fs.writeFile(originalFilePath, originalFile);
     await fs.writeFile(modifiedFilePath, modifiedFile);
     
-    const prReviewResult = await client.callPrompt({
+    // Use callTool instead of callPrompt as the MCP SDK doesn't have a callPrompt method
+    const prReviewResult = await client.callTool({
       name: 'prReview',
       arguments: {
         original_file: originalFilePath,
@@ -339,6 +352,9 @@ module.exports = {
     
     console.log('prReview prompt result:');
     console.log(prReviewResult.content[0].text);
+  } catch (error) {
+    console.error('Error calling prReview prompt:', error.message);
+  }
     
     // Clean up
     console.log('\nCleaning up temporary files...');
