@@ -108,8 +108,16 @@ ${envDetails}`
 3. Performance issues
 4. Code style and best practices
 5. Potential improvements
+6. Deviations from project global rules or requirements
+7. Typical AI failure modes:
+   - Ignored or improperly logged exceptions
+   - Synthetic/fake data generation without proper labeling
+   - Skipped or incomplete tests
+   - Excessive fallbacks and workarounds
+   - Error handling that silently fails
+   - Undefined edge cases
 
-Be specific and provide actionable feedback.`
+Be specific and provide actionable feedback with concrete suggestions for improvement.`
           }
         },
         {
